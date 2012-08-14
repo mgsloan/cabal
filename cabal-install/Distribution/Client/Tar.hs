@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
 -----------------------------------------------------------------------------
 -- |
@@ -66,6 +67,7 @@ import Data.Bits     (Bits, shiftL, testBit)
 import Data.List     (foldl')
 import Numeric       (readOct, showOct)
 import Control.Monad (MonadPlus(mplus), when)
+import Control.Applicative
 import qualified Data.Map as Map
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BS.Char8
@@ -85,10 +87,16 @@ import qualified System.Directory as Permissions
          ( Permissions(executable) )
 import Distribution.Compat.FilePerms
          ( setFileExecutable )
+
 import System.Posix.Types
          ( FileMode )
+#if MIN_VERSION_directory(1,1,1)
+import Data.Time.Clock.POSIX
+         ( utcTimeToPOSIXSeconds )
+#else
 import System.Time
          ( ClockTime(..) )
+#endif
 import System.IO
          ( IOMode(ReadMode), openBinaryFile, hFileSize )
 import System.IO.Unsafe (unsafeInterleaveIO)
@@ -898,6 +906,10 @@ recurseDirectories base (dir:dirs) = unsafeInterleaveIO $ do
     ignore _          = False
 
 getModTime :: FilePath -> IO EpochTime
-getModTime path = do
+getModTime path =  do
+#if MIN_VERSION_directory(1,1,1)
+  floor . utcTimeToPOSIXSeconds <$> getModificationTime path
+#else
   (TOD s _) <- getModificationTime path
   return $! fromIntegral s
+#endif

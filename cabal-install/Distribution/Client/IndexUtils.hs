@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Distribution.Client.IndexUtils
@@ -74,8 +75,13 @@ import System.IO.Error (isDoesNotExistError)
 import Distribution.Compat.Exception (catchIO)
 import System.Directory
          ( getModificationTime, doesFileExist )
+#if MIN_VERSION_directory(1,1,1)
+import Data.Time
+         ( getCurrentTime, utctDay, diffDays )
+#else
 import System.Time
          ( getClockTime, diffClockTimes, normalizeTimeDiff, TimeDiff(tdDay) )
+#endif
 
 
 getInstalledPackages :: Verbosity -> Compiler
@@ -192,12 +198,17 @@ readRepoIndex verbosity repo =
     isOldThreshold = 15 --days
     warnIfIndexIsOld indexFile = do
       indexTime   <- getModificationTime indexFile
+#if MIN_VERSION_directory(1,1,1)
+      currentTime <- getCurrentTime
+      let diff = utctDay currentTime `diffDays` utctDay indexTime
+#else
       currentTime <- getClockTime
-      let diff = normalizeTimeDiff (diffClockTimes currentTime indexTime)
-      when (tdDay diff >= isOldThreshold) $ case repoKind repo of
+      let diff = tdDay . normalizeTimeDiff $ diffClockTimes currentTime indexTime
+#endif
+      when (diff >= isOldThreshold) $ case repoKind repo of
         Left  remoteRepo -> warn verbosity $
              "The package list for '" ++ remoteRepoName remoteRepo
-          ++ "' is " ++ show (tdDay diff)  ++ " days old.\nRun "
+          ++ "' is " ++ show diff ++ " days old.\nRun "
           ++ "'cabal update' to get the latest list of available packages."
         Right _localRepo -> return ()
 
